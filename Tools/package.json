@@ -1,0 +1,7 @@
+{
+  "name": "ai-usage-menubar-tools",
+  "private": true,
+  "dependencies": {
+    "ccusage": "20.0.45"
+  }
+}
