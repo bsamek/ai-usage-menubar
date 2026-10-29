@@ -23,18 +23,28 @@ enum EntryPoint {
                     print("  \(agent.displayName): \(UsageFormat.dollars(agent.totalCost)) · \(agent.models.count) models")
                 }
                 if let warnings = snapshot.warnings { print("Warnings: \(warnings)") }
-                if checkLayout && !snapshot.report.agents.isEmpty {
+                if checkLayout {
                     NSApplication.shared.setActivationPolicy(.accessory)
+                    for contentHeight: CGFloat in [80, 320, 740] {
+                        let viewport = NSHostingController(rootView:
+                            ContentFittingScrollView(maximumHeight: 370) {
+                                Color.clear.frame(height: contentHeight)
+                            }
+                        )
+                        let measured = viewport.sizeThatFits(in: CGSize(width: 404, height: 0)).height
+                        let expected = min(contentHeight, 370)
+                        guard abs(measured - expected) < 1 else {
+                            print("FAIL: \(Int(contentHeight))-point content used \(Int(measured)) points; expected \(Int(expected)).")
+                            exit(1)
+                        }
+                        print("PASS: \(Int(contentHeight))-point content fits a \(Int(measured))-point viewport.")
+                    }
                     let store = UsageStore(client: makeClient(), snapshot: snapshot)
                     let controller = NSHostingController(rootView: UsageView(store: store))
                     // A menu-bar popup can propose zero height during initial sizing.
                     let size = controller.sizeThatFits(in: CGSize(width: 440, height: 0))
                     print("Dropdown layout: \(Int(size.width)) × \(Int(size.height)) points")
-                    guard size.height >= 420 else {
-                        print("FAIL: the dropdown's breakdown area has collapsed.")
-                        exit(1)
-                    }
-                    print("PASS: the dropdown reserves space for the breakdown (no screenshot taken).")
+                    print("PASS: short lists fit their content and long lists scroll, even with a zero-height proposal (no screenshot taken).")
                 }
             } catch {
                 print("AI Usage: \(error.localizedDescription)")

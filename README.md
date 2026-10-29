@@ -38,8 +38,9 @@ enable this automatically.
 "$HOME/Applications/AI Usage.app/Contents/MacOS/AIUsageMenuBar" --check-layout
 ```
 
-`--check-layout` also measures the dropdown offscreen to catch a collapsed
-breakdown area. It does not open a window or take a screenshot.
+`--check-layout` also measures the dropdown offscreen and checks that short
+breakdowns fit their content, long lists scroll, and neither can collapse. It
+does not open a window or take a screenshot.
 
 For `swift run` development, set `AI_USAGE_CCUSAGE` to the absolute path of a
 native ccusage executable. The subprocess runs from your home directory so

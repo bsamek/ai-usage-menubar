@@ -35,7 +35,7 @@ struct UsageView: View {
                 if snapshot.report.agents.isEmpty {
                     Text("No recorded usage today.").foregroundStyle(.secondary).padding(.vertical, 12)
                 } else {
-                    ScrollView {
+                    ContentFittingScrollView(maximumHeight: 370) {
                         VStack(alignment: .leading, spacing: 16) {
                             ForEach(snapshot.report.agents) { agent in
                                 agentSection(agent)
@@ -43,9 +43,6 @@ struct UsageView: View {
                         }
                         .padding(.trailing, 4)
                     }
-                    // MenuBarExtra can initially propose zero height. A maximum
-                    // alone lets the entire breakdown collapse above the footer.
-                    .frame(height: 370)
                     Text("\(UsageFormat.tokens(snapshot.report.totals.totalTokens)) total tokens, including cache")
                         .font(.caption).foregroundStyle(.secondary)
                 }
