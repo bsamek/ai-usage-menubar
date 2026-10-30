@@ -22,7 +22,7 @@ private struct ContentFittingScrollLayout: Layout {
         let contentSize = subviews[0].sizeThatFits(
             ProposedViewSize(width: proposal.width, height: nil)
         )
-        // Ignore zero-height proposals from MenuBarExtra, without reserving
+        // Ignore zero-height proposals during popup sizing, without reserving
         // empty space below short content or relying on a later state update.
         return CGSize(width: contentSize.width, height: min(contentSize.height, maximumHeight))
     }

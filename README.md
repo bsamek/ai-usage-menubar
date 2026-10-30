@@ -4,6 +4,7 @@ A small native macOS menu-bar app showing today's estimated AI API cost. Click
 the total to see each harness and its models, costs, and token counts.
 
 - Refreshes every 30 seconds, on wake, or with **Refresh now**.
+- Shows the breakdown in a single native popover, without a separate window background.
 - Keeps the last successful report after an error and marks it with `!`.
 - Reads the same local histories as `aitoday` and `aimonitor`; those scripts are
   unchanged. Includes every source ccusage detects, not just three hard-coded ones.
@@ -39,8 +40,9 @@ enable this automatically.
 ```
 
 `--check-layout` also measures the dropdown offscreen and checks that short
-breakdowns fit their content, long lists scroll, and neither can collapse. It
-does not open a window or take a screenshot.
+breakdowns fit their content, long lists scroll, and the popover fits its content
+both before and after the first report. It does not open a window or take a
+screenshot.
 
 For `swift run` development, set `AI_USAGE_CCUSAGE` to the absolute path of a
 native ccusage executable. The subprocess runs from your home directory so
