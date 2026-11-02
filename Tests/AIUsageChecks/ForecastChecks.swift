@@ -23,7 +23,6 @@ enum ForecastChecks {
         ("warm-up and end-of-workday boundaries", boundaries),
         ("zero and invalid forecast inputs", invalidInputs),
         ("custom hours and short windows", customHours),
-        ("work-hours persistence and corrupt settings", persistence),
         ("local calendar, midnight, and timezone", localContext),
         ("daylight-saving working windows", daylightSaving),
         ("cached forecast stays frozen and stale", cachedSnapshot),
@@ -75,20 +74,6 @@ enum ForecastChecks {
         try expect(forecast("2026-11-02T09:15:00-05:00", hours: short) == .projected(total: 6, workdayEnded: true), "Short day ended")
     }
 
-    private static func persistence() throws {
-        let suite = "AIUsageForecastChecks.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-        try expect(WorkHours.load(from: defaults) == .standard, "Missing settings default")
-        let hours = WorkHours(startMinute: 615, endMinute: 1095)!
-        hours.save(to: defaults)
-        try expect(WorkHours.load(from: UserDefaults(suiteName: suite)!) == hours, "Settings reload")
-        for data in ["not JSON", #"{"startMinute":540,"endMinute":400}"#, #"{"startMinute":-1,"endMinute":1080}"#] {
-            defaults.set(Data(data.utf8), forKey: "forecast.workHours")
-            try expect(WorkHours.load(from: defaults) == .standard, "Corrupt settings fallback")
-        }
-    }
-
     private static func localContext() throws {
         let instant = checkDate("2026-11-03T01:00:00Z")
         let ny = UsageDayContext(date: instant, timeZone: checkZone)
@@ -115,18 +100,18 @@ enum ForecastChecks {
         let snapshot = UsageSnapshot(report: try report(period: observation.context.period), fetchedAt: date,
                                      warnings: nil, context: observation.context)
         let cached = UsageObservation(date: date.addingTimeInterval(3600), timeZone: checkZone)
-        try expect(snapshot.forecast(workHours: .standard, at: cached) == .projected(total: 18, workdayEnded: false), "Cache must not decay with elapsed time")
+        try expect(snapshot.forecast(at: cached) == .projected(total: 18, workdayEnded: false), "Cache must not decay with elapsed time")
         try expect(!snapshot.isStale(at: observation), "Fresh snapshot")
         try expect(!snapshot.isStale(at: UsageObservation(date: date.addingTimeInterval(90), timeZone: checkZone)), "90-second boundary")
         try expect(snapshot.isStale(at: cached), "Old snapshot")
         for invalid in [UsageObservation(date: date.addingTimeInterval(86400), timeZone: checkZone),
                         UsageObservation(date: date, timeZone: TimeZone(identifier: "America/Los_Angeles")!),
                         UsageObservation(date: date.addingTimeInterval(-1), timeZone: checkZone)] {
-            try expect(snapshot.forecast(workHours: .standard, at: invalid) == .unavailable, "Invalid cache forecast")
+            try expect(snapshot.forecast(at: invalid) == .unavailable, "Invalid cache forecast")
             try expect(snapshot.isStale(at: invalid), "Invalid cache staleness")
         }
         let evening = UsageObservation(date: checkDate("2026-11-02T19:00:00-05:00"), timeZone: checkZone)
-        try expect(snapshot.forecast(workHours: .standard, at: evening) == .projected(total: 18, workdayEnded: false), "Failed fetch after end keeps cached estimate")
+        try expect(snapshot.forecast(at: evening) == .projected(total: 18, workdayEnded: false), "Failed fetch after end keeps cached estimate")
     }
 
     private static func report(period: String) throws -> UsageReport {
@@ -180,7 +165,7 @@ enum ForecastChecks {
     private static func emptyReport() async throws {
         try await withClient(json: #"{"daily":[],"totals":{"totalCost":0,"totalTokens":0}}"#, observe: { observation }) { client in
             let snapshot = try await client.fetch()
-            try expect(snapshot.forecast(workHours: .standard, at: observation) == .projected(total: 0, workdayEnded: false), "Empty local-day forecast")
+            try expect(snapshot.forecast(at: observation) == .projected(total: 0, workdayEnded: false), "Empty local-day forecast")
         }
     }
 }

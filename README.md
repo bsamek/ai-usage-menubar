@@ -5,9 +5,9 @@ the total to see each harness and its models, costs, token counts, and a forecas
 of today's final spend. The menu-bar number stays spend so far.
 
 - Refreshes every 30 seconds, on wake, or with **Refresh now**.
-- Forecasts the final daily total at today's workday pace; defaults to **9 AM–6 PM
-  in your Mac's local timezone**. Expand **Work hours** to edit and apply the
-  start/end times; settings persist across launches.
+- Forecasts the final daily total at today's workday pace using fixed **9 AM–6 PM
+  hours in your Mac's local timezone**. Work hours are not editable; any previously
+  saved custom hours are ignored.
 - Shows the breakdown in a single native popover, without a separate window background.
 - Keeps the last successful report after an error and marks it with `!`.
 - Reads the same local histories as `aitoday` and `aimonitor`; those scripts are
@@ -22,13 +22,12 @@ of today's final spend. The menu-bar number stays spend so far.
 ## Daily forecast
 
 `Projected today = spend so far × full workday duration ÷ elapsed workday duration`.
-For example, $6 spent by noon projects $18 over the default 9 AM–6 PM day.
+For example, $6 spent by noon projects $18 over the fixed 9 AM–6 PM day.
 
-- Waits until 30 minutes after the configured start to avoid an unstable early
-  estimate. For a workday shorter than 30 minutes, waits until its end.
-- At/after the configured end, projects the recorded total, assuming no further
-  spend today. Hours apply every day, including weekends. Overnight ranges are
-  not supported; end must be after start on the same day.
+- Waits until 9:30 AM (30 minutes after the workday starts) to avoid an unstable
+  early estimate.
+- At/after 6 PM, projects the recorded total, assuming no further spend today.
+  Hours apply every day, including weekends.
 - Includes all of today's recorded usage, including before work hours. Overnight
   activity can inflate the forecast; bursty usage and long unsaved responses can
   make it inaccurate. This is a pace estimate, not a billing prediction.
@@ -41,7 +40,7 @@ For example, $6 spent by noon projects $18 over the default 9 AM–6 PM day.
   while waiting for data. A previous-date or previous-timezone forecast is hidden.
   The old spend total remains visible, marked stale with `!`.
 - Reuses ccusage's existing daily totals without new billing calls, log parsers,
-  or stored usage samples. Only the work-hours preference is persisted.
+  or stored usage samples. No work-hours preferences are read or saved.
 
 ## Build and install
 
@@ -67,12 +66,12 @@ enable this automatically.
 "$HOME/Applications/AI Usage.app/Contents/MacOS/AIUsageMenuBar" --check-layout
 ```
 
-`--check` prints spend so far, the forecast, and configured local work hours.
+`--check` prints spend so far, the forecast, and fixed local work hours.
 `--check-layout` also measures the dropdown offscreen: short and long lists,
-expanded settings, warm-up, projected, ended, empty, cached, previous-date, and
-changed-timezone states. It checks settings persistence and failed-refresh cache
-retention using isolated preferences. It does not open a window or take a
-screenshot.
+warm-up, projected, ended, empty, cached, previous-date, and changed-timezone
+states. It checks that legacy custom hours are ignored and failed refreshes retain
+cached data, without changing saved preferences. It does not open a window or take
+a screenshot.
 
 For `swift run` development, set `AI_USAGE_CCUSAGE` to the absolute path of a
 native ccusage executable. The subprocess runs from your home directory so

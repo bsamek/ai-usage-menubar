@@ -8,8 +8,8 @@ import SwiftUI
 final class UsagePopover: NSPopover {
     private let hostingController: NSHostingController<UsageView>
 
-    init(store: UsageStore, workHoursExpanded: Bool = false) {
-        hostingController = NSHostingController(rootView: UsageView(store: store, workHoursExpanded: workHoursExpanded))
+    init(store: UsageStore) {
+        hostingController = NSHostingController(rootView: UsageView(store: store))
         super.init()
         behavior = .transient
         contentViewController = hostingController

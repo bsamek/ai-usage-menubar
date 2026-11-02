@@ -24,11 +24,11 @@ enum EntryPoint {
                 }
                 if let warnings = snapshot.warnings { print("Warnings: \(warnings)") }
                 let observation = UsageObservation.localNow()
-                let hours = WorkHours.load(from: .standard)
+                let hours = WorkHours.standard
                 if let window = hours.window(on: observation.date, calendar: UsageDayContext.calendar(in: observation.timeZone)) {
                     print("Work hours: \(UsageFormat.time(window.start, timeZone: observation.timeZone))–\(UsageFormat.time(window.end, timeZone: observation.timeZone)) · \(observation.timeZone.identifier)")
                 }
-                switch snapshot.forecast(workHours: hours, at: observation) {
+                switch snapshot.forecast(at: observation) {
                 case .projected(let total, let ended):
                     print("Projected today: ≈ \(UsageFormat.dollars(total))\(ended ? " · workday ended" : " · at today's pace")")
                 case .waiting(let until):

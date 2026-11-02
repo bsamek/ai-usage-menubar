@@ -19,12 +19,12 @@ public struct UsageSnapshot: Sendable {
             || observation.date.timeIntervalSince(fetchedAt) > 90
     }
 
-    public func forecast(workHours: WorkHours, at observation: UsageObservation) -> DailySpendForecast {
+    public func forecast(at observation: UsageObservation) -> DailySpendForecast {
         guard context == observation.context, observation.date >= fetchedAt else { return .unavailable }
         // Cached reports keep the rate from their last observation, rather than
         // pretending that a failed refresh observed a period of inactivity.
         return .estimate(cost: report.totals.totalCost, observedAt: fetchedAt,
-                         calendar: UsageDayContext.calendar(in: observation.timeZone), workHours: workHours)
+                         calendar: UsageDayContext.calendar(in: observation.timeZone))
     }
 }
 

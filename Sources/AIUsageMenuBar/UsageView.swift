@@ -2,17 +2,8 @@ import AIUsageCore
 import AppKit
 import SwiftUI
 
-// Avoid the newer SDK's same-named State macro; CLT builds use the property wrapper.
-private typealias ViewState<Value> = SwiftUI.State<Value>
-
 struct UsageView: View {
     @ObservedObject var store: UsageStore
-    @ViewState private var workHoursExpanded: Bool
-
-    init(store: UsageStore, workHoursExpanded: Bool = false) {
-        self.store = store
-        _workHoursExpanded = ViewState(initialValue: workHoursExpanded)
-    }
 
     var body: some View {
         // Also invalidate stale/date-sensitive content while the popover stays open.
@@ -52,7 +43,7 @@ struct UsageView: View {
                 if snapshot.report.agents.isEmpty {
                     Text(store.isStale ? "No recorded usage in the cached report." : "No recorded usage today.").foregroundStyle(.secondary).padding(.vertical, 12)
                 } else {
-                    ContentFittingScrollView(maximumHeight: workHoursExpanded ? 230 : 370) {
+                    ContentFittingScrollView(maximumHeight: 370) {
                         VStack(alignment: .leading, spacing: 16) {
                             ForEach(snapshot.report.agents) { agent in
                                 agentSection(agent)
@@ -76,8 +67,6 @@ struct UsageView: View {
                 }
                 .padding(.vertical, 16)
             }
-
-            WorkHoursEditor(store: store, isExpanded: $workHoursExpanded)
 
             Divider()
             HStack {
@@ -161,66 +150,5 @@ struct UsageView: View {
         Text(message)
             .font(.caption).foregroundStyle(color)
             .lineLimit(5).help(message).textSelection(.enabled)
-    }
-}
-
-private struct WorkHoursEditor: View {
-    @ObservedObject var store: UsageStore
-    @Binding var isExpanded: Bool
-    @ViewState private var start = Date()
-    @ViewState private var end = Date()
-
-    private var draft: WorkHours? {
-        let calendar = UsageDayContext.calendar(in: store.timeZone)
-        let startParts = calendar.dateComponents([.hour, .minute], from: start)
-        let endParts = calendar.dateComponents([.hour, .minute], from: end)
-        return WorkHours(startMinute: (startParts.hour ?? 0) * 60 + (startParts.minute ?? 0),
-                         endMinute: (endParts.hour ?? 0) * 60 + (endParts.minute ?? 0))
-    }
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    DatePicker("Start", selection: $start, displayedComponents: .hourAndMinute)
-                    DatePicker("End", selection: $end, displayedComponents: .hourAndMinute)
-                }
-                .environment(\.timeZone, store.timeZone)
-                .datePickerStyle(.field)
-                if draft == nil {
-                    Text("End must be after start on the same day.")
-                        .foregroundStyle(.orange)
-                }
-                HStack {
-                    Text("Local time · applies every day").foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Apply") {
-                        guard let hours = draft else { return }
-                        store.setWorkHours(hours)
-                        isExpanded = false
-                    }
-                    .disabled(draft == nil)
-                }
-            }
-            .padding(.top, 6)
-        } label: {
-            Text("Work hours · \(store.workHoursLabel)")
-        }
-        .font(.caption)
-        .onAppear { resetDraft() }
-        .onChange(of: isExpanded) { expanded in
-            if expanded { resetDraft() }
-        }
-        .onChange(of: store.timeZone.identifier) { _ in resetDraft() }
-    }
-
-    private func resetDraft() {
-        let calendar = UsageDayContext.calendar(in: store.timeZone)
-        // A stable reference day avoids nonexistent times in the DST editor.
-        let reference = calendar.date(from: DateComponents(year: 2001, month: 1, day: 15))!
-        if let window = store.workHours.window(on: reference, calendar: calendar) {
-            start = window.start
-            end = window.end
-        }
     }
 }

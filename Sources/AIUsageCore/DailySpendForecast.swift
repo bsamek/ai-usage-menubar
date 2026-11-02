@@ -1,39 +1,16 @@
 import Foundation
 
-public struct WorkHours: Codable, Equatable, Sendable {
+public struct WorkHours: Equatable, Sendable {
     public let startMinute: Int
     public let endMinute: Int
 
     public static let standard = WorkHours(startMinute: 9 * 60, endMinute: 18 * 60)!
-    private static let settingsKey = "forecast.workHours"
 
     public init?(startMinute: Int, endMinute: Int) {
         guard (0..<1440).contains(startMinute), (0..<1440).contains(endMinute),
               endMinute > startMinute else { return nil }
         self.startMinute = startMinute
         self.endMinute = endMinute
-    }
-
-    // Decode through the validating initializer, including persisted settings.
-    public init(from decoder: Decoder) throws {
-        let values = try decoder.container(keyedBy: CodingKeys.self)
-        let start = try values.decode(Int.self, forKey: .startMinute)
-        let end = try values.decode(Int.self, forKey: .endMinute)
-        guard let hours = WorkHours(startMinute: start, endMinute: end) else {
-            throw DecodingError.dataCorruptedError(forKey: .endMinute, in: values,
-                                                   debugDescription: "Work hours must be a same-day increasing range.")
-        }
-        self = hours
-    }
-
-    public static func load(from defaults: UserDefaults) -> WorkHours {
-        guard let data = defaults.data(forKey: settingsKey),
-              let hours = try? JSONDecoder().decode(WorkHours.self, from: data) else { return .standard }
-        return hours
-    }
-
-    public func save(to defaults: UserDefaults) {
-        if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.settingsKey) }
     }
 
     public func window(on date: Date, calendar: Calendar) -> (start: Date, end: Date)? {

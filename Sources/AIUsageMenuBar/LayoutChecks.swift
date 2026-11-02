@@ -2,7 +2,7 @@ import AIUsageCore
 import AppKit
 import SwiftUI
 
-/// Deterministic UI/model checks, without showing a window or changing real settings.
+/// Deterministic UI/model checks, without showing a window or changing saved settings.
 @MainActor
 enum LayoutChecks {
     private struct Failure: Error, CustomStringConvertible { let description: String }
@@ -13,20 +13,23 @@ enum LayoutChecks {
 
     static func run(client: CCUsageClient, current: UsageSnapshot) async throws {
         NSApplication.shared.setActivationPolicy(.accessory)
-        for cap: CGFloat in [370, 230] {
-            for contentHeight: CGFloat in [80, 320, 740] {
-                let viewport = NSHostingController(rootView:
-                    ContentFittingScrollView(maximumHeight: cap) { Color.clear.frame(height: contentHeight) }
-                )
-                let measured = viewport.sizeThatFits(in: CGSize(width: 404, height: 0)).height
-                try require(abs(measured - min(contentHeight, cap)) < 1, "Scroll viewport cap \(cap), content \(contentHeight), measured \(measured)")
-                print("PASS: \(Int(contentHeight))-point content fits a \(Int(measured))-point viewport (cap \(Int(cap))).")
-            }
+        let cap: CGFloat = 370
+        for contentHeight: CGFloat in [80, 320, 740] {
+            let viewport = NSHostingController(rootView:
+                ContentFittingScrollView(maximumHeight: cap) { Color.clear.frame(height: contentHeight) }
+            )
+            let measured = viewport.sizeThatFits(in: CGSize(width: 404, height: 0)).height
+            try require(abs(measured - min(contentHeight, cap)) < 1, "Scroll viewport cap \(cap), content \(contentHeight), measured \(measured)")
+            print("PASS: \(Int(contentHeight))-point content fits a \(Int(measured))-point viewport (cap \(Int(cap))).")
         }
 
-        let suite = "AIUsageLayoutChecks.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        // Simulate previously saved custom hours without changing real preferences.
+        let defaults = UserDefaults.standard
+        let arguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)
+        var legacyArguments = arguments
+        legacyArguments["forecast.workHours"] = Data(#"{"startMinute":600,"endMinute":1080}"#.utf8)
+        defaults.setVolatileDomain(legacyArguments, forName: UserDefaults.argumentDomain)
+        defer { defaults.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain) }
         let zone = TimeZone(identifier: "America/New_York")!
         let noon = ISO8601DateFormatter().date(from: "2026-11-02T12:00:00-05:00")!
         let clock = Clock(UsageObservation(date: noon, timeZone: zone))
@@ -39,7 +42,7 @@ enum LayoutChecks {
                           context: UsageDayContext(date: date, timeZone: zone))
         }
         func store(_ snapshot: UsageSnapshot?) -> UsageStore {
-            UsageStore(client: failedClient, snapshot: snapshot, defaults: defaults, observe: { clock.observation })
+            UsageStore(client: failedClient, snapshot: snapshot, observe: { clock.observation })
         }
 
         let initial = store(nil)
@@ -47,14 +50,13 @@ enum LayoutChecks {
         await initial.refresh()
         try require(initial.snapshot == nil && initial.forecast == .unavailable, "Initial failure must not invent usage")
         try measure("after an initial refresh failure", store: initial)
-        try measure("with the real current report", store: UsageStore(client: client, snapshot: current, defaults: defaults))
+        try measure("with the real current report", store: UsageStore(client: client, snapshot: current))
         let fresh = store(snapshot(noon, report: report))
-        try require(fresh.forecast == .projected(total: 18, workdayEnded: false), "Noon forecast")
+        try require(fresh.forecast == .projected(total: 18, workdayEnded: false), "Noon forecast must use fixed 9–6 hours, ignoring legacy preferences")
         try require(fresh.label == "$6.00", "Menu bar must remain spend so far")
         try measure("with a projected total", store: fresh)
         try measure("with no usage", store: store(snapshot(noon, report: emptyReport)))
         try measure("with many models", store: store(snapshot(noon, report: longReport)))
-        try measure("with expanded work-hours settings", store: store(snapshot(noon, report: longReport)), expanded: true)
 
         let early = noon.addingTimeInterval(-3 * 3600 + 10 * 60)
         clock.observation = UsageObservation(date: early, timeZone: zone)
@@ -76,7 +78,6 @@ enum LayoutChecks {
         let longCached = store(snapshot(noon, report: longReport))
         await longCached.refresh()
         try measure("with many models and a cached forecast", store: longCached)
-        try measure("with many cached models and expanded settings", store: longCached, expanded: true)
 
         clock.observation = UsageObservation(date: noon.addingTimeInterval(86400), timeZone: zone)
         try require(fresh.forecast == .unavailable && fresh.isStale, "Yesterday's forecast must be hidden")
@@ -86,19 +87,15 @@ enum LayoutChecks {
         try measure("after a timezone change", store: fresh)
 
         clock.observation = UsageObservation(date: noon, timeZone: zone)
-        let custom = WorkHours(startMinute: 600, endMinute: 1080)!
-        fresh.setWorkHours(custom)
-        try require(fresh.forecast == .projected(total: 24, workdayEnded: false), "Settings must recompute forecast")
         let reloaded = store(snapshot(noon, report: report))
-        try require(reloaded.workHours == custom && reloaded.forecast == fresh.forecast, "Settings must persist across stores")
-        try require(reloaded.label == "$6.00", "Settings must not change menu-bar total")
-        try measure("with persisted custom hours", store: reloaded, expanded: true)
-        print("PASS: settings persistence, cache retention, forecast states and unchanged menu-bar spend (no window shown).")
+        try require(reloaded.forecast == .projected(total: 18, workdayEnded: false), "New stores must keep the fixed workday")
+        try require(reloaded.label == "$6.00", "Fixed work hours must not change menu-bar total")
+        print("PASS: fixed 9–6 hours ignore legacy settings; cache retention, forecast states and menu-bar spend are unchanged (no window shown).")
     }
 
-    private static func measure(_ description: String, store: UsageStore, expanded: Bool = false) throws {
-        let popover = UsagePopover(store: store, workHoursExpanded: expanded)
-        let controller = NSHostingController(rootView: UsageView(store: store, workHoursExpanded: expanded))
+    private static func measure(_ description: String, store: UsageStore) throws {
+        let popover = UsagePopover(store: store)
+        let controller = NSHostingController(rootView: UsageView(store: store))
         let size = controller.sizeThatFits(in: CGSize(width: 440, height: 0))
         try require(abs(popover.contentSize.width - size.width) < 1 && abs(popover.contentSize.height - size.height) < 1
                     && size.width == 440 && size.height > 0 && size.height < 900
