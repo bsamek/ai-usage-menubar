@@ -87,6 +87,7 @@ public enum UsageError: LocalizedError {
     case failed(Int32, String)
     case timedOut
     case invalidReport(String)
+    case contextChanged
 
     public var errorDescription: String? {
         switch self {
@@ -96,6 +97,8 @@ public enum UsageError: LocalizedError {
             "ccusage exited with status \(status). \(message)"
         case .timedOut:
             "ccusage did not finish within 45 seconds. The next refresh will retry."
+        case .contextChanged:
+            "The local date or timezone changed during refresh. The next refresh will retry."
         case .invalidReport(let message):
             "Could not read ccusage's report. \(message)"
         }
@@ -105,6 +108,15 @@ public enum UsageError: LocalizedError {
 public enum UsageFormat {
     public static func dollars(_ value: Double) -> String {
         value.formatted(.currency(code: "USD").locale(Locale(identifier: "en_US")))
+    }
+
+    public static func time(_ date: Date, timeZone: TimeZone) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 
     public static func tokens(_ value: Int) -> String {

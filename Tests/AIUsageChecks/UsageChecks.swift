@@ -1,15 +1,15 @@
 import AIUsageCore
 import Foundation
 
-private struct CheckFailure: Error, CustomStringConvertible {
+struct CheckFailure: Error, CustomStringConvertible {
     let description: String
 }
 
-private func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     if !condition() { throw CheckFailure(description: message) }
 }
 
-private func expectFailure(_ body: () throws -> Void) throws {
+func expectFailure(_ body: () throws -> Void) throws {
     do { try body() } catch { return }
     throw CheckFailure(description: "Expected invalid data to fail")
 }
@@ -41,7 +41,7 @@ enum UsageChecks {
             ("subprocess exit failures", processFailure),
             ("deadline and forced termination of a stuck process", processTimeout),
             ("missing executable", missingExecutable),
-        ]
+        ] + ForecastChecks.checks
         var failures = 0
         for (name, check) in checks {
             do {
@@ -83,7 +83,8 @@ enum UsageChecks {
         let client = CCUsageClient(
             executable: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", "cat report.json; printf 'Pricing warning' >&2"],
-            directory: directory
+            directory: directory,
+            observe: { UsageObservation(date: checkDate("2026-10-29T12:00:00-04:00"), timeZone: checkZone) }
         )
         let snapshot = try await client.fetch()
         try expect(snapshot.report.totals.totalCost == 3, "Subprocess JSON")

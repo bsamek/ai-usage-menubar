@@ -8,8 +8,8 @@ import SwiftUI
 final class UsagePopover: NSPopover {
     private let hostingController: NSHostingController<UsageView>
 
-    init(store: UsageStore) {
-        hostingController = NSHostingController(rootView: UsageView(store: store))
+    init(store: UsageStore, workHoursExpanded: Bool = false) {
+        hostingController = NSHostingController(rootView: UsageView(store: store, workHoursExpanded: workHoursExpanded))
         super.init()
         behavior = .transient
         contentViewController = hostingController
@@ -41,7 +41,7 @@ final class UsageStatusItem: NSObject, NSPopoverDelegate {
         popover.delegate = self
         if let button = item.button {
             button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            button.toolTip = "Today's estimated AI API cost. Click for the harness and model breakdown."
+            button.toolTip = "Today's estimated AI API cost so far. Click for the breakdown and daily forecast."
             button.target = self
             button.action = #selector(togglePopover)
         }

@@ -23,40 +23,20 @@ enum EntryPoint {
                     print("  \(agent.displayName): \(UsageFormat.dollars(agent.totalCost)) · \(agent.models.count) models")
                 }
                 if let warnings = snapshot.warnings { print("Warnings: \(warnings)") }
-                if checkLayout {
-                    NSApplication.shared.setActivationPolicy(.accessory)
-                    for contentHeight: CGFloat in [80, 320, 740] {
-                        let viewport = NSHostingController(rootView:
-                            ContentFittingScrollView(maximumHeight: 370) {
-                                Color.clear.frame(height: contentHeight)
-                            }
-                        )
-                        let measured = viewport.sizeThatFits(in: CGSize(width: 404, height: 0)).height
-                        let expected = min(contentHeight, 370)
-                        guard abs(measured - expected) < 1 else {
-                            print("FAIL: \(Int(contentHeight))-point content used \(Int(measured)) points; expected \(Int(expected)).")
-                            exit(1)
-                        }
-                        print("PASS: \(Int(contentHeight))-point content fits a \(Int(measured))-point viewport.")
-                    }
-                    let snapshots: [(String, UsageSnapshot?)] = [
-                        ("before the first refresh", nil), ("with the current report", snapshot),
-                    ]
-                    for (description, snapshot) in snapshots {
-                        let store = UsageStore(client: makeClient(), snapshot: snapshot)
-                        let popover = UsagePopover(store: store)
-                        let controller = NSHostingController(rootView: UsageView(store: store))
-                        // A popup can propose zero height during initial sizing.
-                        let size = controller.sizeThatFits(in: CGSize(width: 440, height: 0))
-                        guard popover.contentSize == size, size.width == 440, size.height > 0,
-                              popover.behavior == .transient, !popover.isShown else {
-                            print("FAIL: the popover does not fit its content offscreen.")
-                            exit(1)
-                        }
-                        print("PASS: native popover \(description) fits \(Int(size.width)) × \(Int(size.height)) points.")
-                    }
-                    print("PASS: short lists fit their content and long lists scroll, even with a zero-height proposal (no screenshot taken).")
+                let observation = UsageObservation.localNow()
+                let hours = WorkHours.load(from: .standard)
+                if let window = hours.window(on: observation.date, calendar: UsageDayContext.calendar(in: observation.timeZone)) {
+                    print("Work hours: \(UsageFormat.time(window.start, timeZone: observation.timeZone))–\(UsageFormat.time(window.end, timeZone: observation.timeZone)) · \(observation.timeZone.identifier)")
                 }
+                switch snapshot.forecast(workHours: hours, at: observation) {
+                case .projected(let total, let ended):
+                    print("Projected today: ≈ \(UsageFormat.dollars(total))\(ended ? " · workday ended" : " · at today's pace")")
+                case .waiting(let until):
+                    print("Projected today: waiting until \(UsageFormat.time(until, timeZone: observation.timeZone)) (30-minute warm-up)")
+                case .unavailable:
+                    print("Projected today: unavailable for this local date/timezone")
+                }
+                if checkLayout { try await LayoutChecks.run(client: makeClient(), current: snapshot) }
             } catch {
                 print("AI Usage: \(error.localizedDescription)")
                 exit(1)

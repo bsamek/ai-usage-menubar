@@ -5,24 +5,48 @@ public struct UsageSnapshot: Sendable {
     public let report: UsageReport
     public let fetchedAt: Date
     public let warnings: String?
+    public let context: UsageDayContext
+
+    public init(report: UsageReport, fetchedAt: Date, warnings: String?, context: UsageDayContext) {
+        self.report = report
+        self.fetchedAt = fetchedAt
+        self.warnings = warnings
+        self.context = context
+    }
+
+    public func isStale(at observation: UsageObservation) -> Bool {
+        context != observation.context || observation.date < fetchedAt
+            || observation.date.timeIntervalSince(fetchedAt) > 90
+    }
+
+    public func forecast(workHours: WorkHours, at observation: UsageObservation) -> DailySpendForecast {
+        guard context == observation.context, observation.date >= fetchedAt else { return .unavailable }
+        // Cached reports keep the rate from their last observation, rather than
+        // pretending that a failed refresh observed a period of inactivity.
+        return .estimate(cost: report.totals.totalCost, observedAt: fetchedAt,
+                         calendar: UsageDayContext.calendar(in: observation.timeZone), workHours: workHours)
+    }
 }
 
 public struct CCUsageClient: Sendable {
     public let executable: URL
-    public let arguments: [String]
+    public let arguments: [String]?
     public let directory: URL
     public let timeout: TimeInterval
+    private let observe: @Sendable () -> UsageObservation
 
     public init(
         executable: URL,
-        arguments: [String] = ["daily", "--last", "1", "--json", "--by-agent"],
+        arguments: [String]? = nil,
         directory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        timeout: TimeInterval = 45
+        timeout: TimeInterval = 45,
+        observe: @escaping @Sendable () -> UsageObservation = { .localNow() }
     ) {
         self.executable = executable
         self.arguments = arguments
         self.directory = directory
         self.timeout = timeout
+        self.observe = observe
     }
 
     public func fetch() async throws -> UsageSnapshot {
@@ -34,6 +58,8 @@ public struct CCUsageClient: Sendable {
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             throw UsageError.missingExecutable(executable.path)
         }
+
+        let context = observe().context
 
         // Files avoid pipe-buffer deadlocks, including when ccusage emits many warnings.
         let temporary = FileManager.default.temporaryDirectory
@@ -53,7 +79,7 @@ public struct CCUsageClient: Sendable {
 
         let process = Process()
         process.executableURL = executable
-        process.arguments = arguments
+        process.arguments = arguments ?? context.dailyArguments
         process.currentDirectoryURL = directory
         var environment = ProcessInfo.processInfo.environment
         environment["NO_COLOR"] = "1"
@@ -80,8 +106,14 @@ public struct CCUsageClient: Sendable {
         guard data.count <= 8_000_000 else {
             throw UsageError.invalidReport("The JSON report was unexpectedly large.")
         }
+        let finished = observe()
+        guard finished.context == context else { throw UsageError.contextChanged }
         let report = try UsageReport.decode(data)
-        return UsageSnapshot(report: report, fetchedAt: Date(), warnings: errorText.isEmpty ? nil : errorText)
+        guard report.daily.allSatisfy({ $0.period == context.period }) else {
+            throw UsageError.invalidReport("The report does not match the requested local date.")
+        }
+        return UsageSnapshot(report: report, fetchedAt: finished.date,
+                             warnings: errorText.isEmpty ? nil : errorText, context: context)
     }
 
     private func read(_ url: URL, limit: Int) throws -> Data {
