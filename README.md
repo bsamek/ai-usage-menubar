@@ -10,8 +10,8 @@ of today's final spend. The menu-bar number stays spend so far.
   saved custom hours are ignored.
 - Shows the breakdown in a single native popover, without a separate window background.
 - Keeps the last successful report after an error and marks it with `!`.
-- Reads the same local histories as `aitoday` and `aimonitor`; those scripts are
-  unchanged. Includes every source ccusage detects, not just three hard-coded ones.
+- Reads local AI usage histories. Includes every source ccusage detects, not
+  just three hard-coded ones.
 - Bundles ccusage **20.0.45** as a native executable. Bun/Node are not needed at
   runtime, and refreshing never checks npm or installs a package.
 - Uses ccusage's normal pricing lookup and user configuration. It may fetch
